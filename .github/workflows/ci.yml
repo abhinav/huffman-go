@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      name: Check out repository
+    - uses: actions/setup-go@v5
+      name: Set up Go
+      with:
+        go-version: stable
+        cache: false
+    - uses: golangci/golangci-lint-action@v6
+      name: Install golangci-lint
+      with:
+        version: latest
+        args: --help
+    - run: make lint
+      name: Lint
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.22.x", "1.23.x"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go }}
+    - name: Test
+      run: make cover
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
