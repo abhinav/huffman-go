@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 )
 
@@ -165,6 +166,26 @@ func TestLabel_rapid(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestLabel_rapid_arbitraryBases(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		base := rapid.IntRange(2, 100).Draw(t, "base")
+		freqs := rapid.SliceOf(rapid.Int()).Draw(t, "freqs")
+		labels := Label(base, freqs)
+
+		// Not checking all the invariants here.
+		// We just want to verify that it doesn't panic
+		// on random bases and frequencies.
+		require.Len(t, labels, len(freqs), "number of labels did not match")
+
+		var seen [][]int
+		for _, label := range labels {
+			assert.NotEmpty(t, label, "label must not be empty")
+			assert.NotContains(t, seen, label, "duplicate label %v", label)
+			seen = append(seen, label)
+		}
+	})
 }
 
 func assertLabelInvariants(t assert.TestingT, numItems int, labels []string) bool {
