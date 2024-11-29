@@ -93,14 +93,15 @@ func Label(base int, freqs []int) (labels [][]int) {
 	///////////////////////////////////////////////////////////////////////
 	numNodes := len(freqs) + (len(freqs)-1)/(base-1) + 1
 
-	nodes := make([]node, 0, numNodes) // one allocation for all nodes
-	for _, f := range freqs {
-		nodes = append(nodes, node{
+	nodes := make([]node, numNodes) // one allocation for all nodes
+	for i, f := range freqs {
+		nodes[i] = node{
 			Freq:         f,
 			ParentIndex:  -1,
 			SiblingIndex: -1,
-		})
+		}
 	}
+	nextNodeIdx := len(freqs)
 
 	// Fill the heap with leaf nodes for the user-provided elements.
 	nodeHeap := make(nodeHeap, len(freqs))
@@ -120,7 +121,8 @@ func Label(base int, freqs []int) (labels [][]int) {
 	// We'll end up with a tree where each node has up to $base children.
 	// The path from root down to leaf nodes will is the label for that item.
 	combine := func(numChildren int) {
-		parentIdx := len(nodes)
+		parentIdx := nextNodeIdx
+		nextNodeIdx++
 
 		var freq int
 		for i := 0; i < numChildren && len(nodeHeap) > 0; i++ {
@@ -130,11 +132,11 @@ func Label(base int, freqs []int) (labels [][]int) {
 			freq += child.Freq
 		}
 
-		nodes = append(nodes, node{
+		nodes[parentIdx] = node{
 			ParentIndex:  -1,
 			SiblingIndex: -1,
 			Freq:         freq,
-		})
+		}
 		heap.Push(&nodeHeap, &nodes[parentIdx])
 	}
 
