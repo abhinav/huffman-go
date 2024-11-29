@@ -11,6 +11,7 @@ package huffman
 
 import (
 	"container/heap"
+	"slices"
 )
 
 // Label generates unique prefix-free labels for items given their frequencies.
@@ -51,10 +52,60 @@ func Label(base int, freqs []int) (labels [][]int) {
 		return [][]int{{0}}
 	}
 
+	// MATHS //////////////////////////////////////////////////////////////
+	//
+	// There are C = len(freqs) items.
+	// Each item gets a node, so that's C nodes to start with.
+	//
+	// We will combine nodes in the heap. Each such combination:
+	//
+	//   - removes $base nodes from the heap
+	//   - adds one new node to the heap
+	//
+	// Resulting in a net $base-1 reduction per iteration.
+	//
+	// We'll iterate until there's only one node left in the heap.
+	//
+	// Suppose the total number of iterations is I.
+	// Starting with C nodes (one for each item),
+	// and removing $base-1 nodes per iteration for I iterations,
+	// we're left with one node in the heap.
+	//
+	//   1 = C - I($base-1)
+	//
+	// Solving for I:
+	//
+	//   1 = C - I($base-1)
+	//   => I($base-1) = C - 1
+	//   => I = (C - 1) / ($base - 1)
+	//
+	// Total number of nodes we need to allocate (N)
+	// is the original C plus one for each iteration.
+	//
+	//    N = C + I
+	//    N = C + (C - 1) / ($base - 1)
+	//
+	// /However/ if the number of items is such that we remove fewer
+	// than $base nodes in one iteration, we need to account for that.
+	// Easy way to do that is to pad the number of iterations by 1
+	// for that one extra node.
+	//
+	///////////////////////////////////////////////////////////////////////
+	numNodes := len(freqs) + (len(freqs)-1)/(base-1) + 1
+
+	nodes := make([]node, 0, numNodes) // one allocation for all nodes
+	for _, f := range freqs {
+		nodes = append(nodes, node{
+			Freq:         f,
+			ParentIndex:  -1,
+			SiblingIndex: -1,
+		})
+	}
+
 	// Fill the heap with leaf nodes for the user-provided elements.
 	nodeHeap := make(nodeHeap, len(freqs))
-	for i, f := range freqs {
-		nodeHeap[i] = &node{Index: i, Freq: f}
+	for i := range freqs {
+		nodeHeap[i] = &nodes[i]
 	}
 	heap.Init(&nodeHeap)
 
@@ -69,19 +120,22 @@ func Label(base int, freqs []int) (labels [][]int) {
 	// We'll end up with a tree where each node has up to $base children.
 	// The path from root down to leaf nodes will is the label for that item.
 	combine := func(numChildren int) {
-		children := make([]*node, 0, numChildren)
+		parentIdx := len(nodes)
+
 		var freq int
 		for i := 0; i < numChildren && len(nodeHeap) > 0; i++ {
 			child := heap.Pop(&nodeHeap).(*node)
-			children = append(children, child)
+			child.ParentIndex = parentIdx
+			child.SiblingIndex = i
 			freq += child.Freq
 		}
 
-		heap.Push(&nodeHeap, &node{
-			Index:    -1,
-			Children: children,
-			Freq:     freq,
+		nodes = append(nodes, node{
+			ParentIndex:  -1,
+			SiblingIndex: -1,
+			Freq:         freq,
 		})
+		heap.Push(&nodeHeap, &nodes[parentIdx])
 	}
 
 	// Special-case: for the first iteration,
@@ -100,42 +154,41 @@ func Label(base int, freqs []int) (labels [][]int) {
 		combine(base)
 	}
 
-	// nodeHeap now contains a single element. We'll use it now as a stack
-	// to iterate through the node tree.
+	// The first len(freqs) nodes in nodes list refer to the leaf nodes.
+	// These get labels assigned to them.
 	labels = make([][]int, len(freqs))
-
-	var labelNode func(*node, []int)
-	labelNode = func(n *node, prefix []int) {
-		// If we found a leaf, copy the label
-		// (iterating into sibilings will mutate it).
-		if i := n.Index; i >= 0 {
-			label := make([]int, len(prefix))
-			copy(label, prefix)
-			labels[i] = label
-			return
+	for idx, n := range nodes[:len(freqs)] {
+		// The label for the item is the path from the root to the leaf.
+		var label []int
+		for c := n; c.ParentIndex != -1; c = nodes[c.ParentIndex] {
+			label = append(label, c.SiblingIndex)
 		}
 
-		// For branches, iterate through their children, prefixing the
-		// corresponding label rune.
-		for i, c := range n.Children {
-			labelNode(c, append(prefix, i))
-		}
+		// Reverse the label so it goes from root to leaf.
+		slices.Reverse(label)
+		labels[idx] = label
 	}
 
-	labelNode(heap.Pop(&nodeHeap).(*node), nil)
 	return labels
 }
 
+// node is used in two places:
+//
+//   - as part of min-heap sorted by Freq
+//   - as part of a tree structure
+//
+// ParentID, and SiblingIndex form the tree structure.
+// Freq is used for the min-heap.
 type node struct {
-	// Index of the leaf node, as identified by the user. This is -1 for
-	// branch nodes.
-	Index int
+	// Index of parent node in the nodes list.
+	ParentIndex int
 
-	// Up to base children of the node. This is nil for leaf nodes.
-	Children []*node
+	// SiblingIndex of the node is its position
+	// in the parent's children list.
+	SiblingIndex int
 
-	// Frequency of the leaf node, or the combined frequency of the leaf
-	// nodes of a branch node.
+	// Frequency of the leaf node,
+	// or the combined frequency of the leaf nodes of a branch node.
 	Freq int
 }
 
