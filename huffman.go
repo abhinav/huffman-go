@@ -54,6 +54,8 @@ func Label(base int, freqs []int) (labels [][]int) {
 
 	// MATHS //////////////////////////////////////////////////////////////
 	//
+	// 1. Number of iterations
+	//
 	// There are C = len(freqs) items.
 	// Each item gets a node, so that's C nodes to start with.
 	//
@@ -79,6 +81,11 @@ func Label(base int, freqs []int) (labels [][]int) {
 	//   => I($base-1) = C - 1
 	//   => I = (C - 1) / ($base - 1)
 	//
+	// I is also the maximum possible depth of the tree
+	// since each iteration adds one level to the tree.
+	//
+	// 2. Numbef of nodes
+	//
 	// Total number of nodes we need to allocate (N)
 	// is the original C plus one for each iteration.
 	//
@@ -86,12 +93,12 @@ func Label(base int, freqs []int) (labels [][]int) {
 	//    N = C + (C - 1) / ($base - 1)
 	//
 	// /However/ if the number of items is such that we remove fewer
-	// than $base nodes in one iteration, we need to account for that.
-	// Easy way to do that is to pad the number of iterations by 1
-	// for that one extra node.
+	// than $base nodes in one iteration, we may have one extra iteration.
+	// Easy way to do that is to pad the number of iterations by 1.
 	//
 	///////////////////////////////////////////////////////////////////////
-	numNodes := len(freqs) + (len(freqs)-1)/(base-1) + 1
+	numIters := (len(freqs)-1)/(base-1) + 1
+	numNodes := len(freqs) + numIters
 
 	nodes := make([]node, numNodes) // one allocation for all nodes
 	for i, f := range freqs {
@@ -124,18 +131,20 @@ func Label(base int, freqs []int) (labels [][]int) {
 		parentIdx := nextNodeIdx
 		nextNodeIdx++
 
-		var freq int
+		var freq, totalHops int
 		for i := 0; i < numChildren && len(nodeHeap) > 0; i++ {
 			child := heap.Pop(&nodeHeap).(*node)
 			child.ParentIndex = parentIdx
 			child.SiblingIndex = i
 			freq += child.Freq
+			totalHops += child.TotalHops
 		}
 
 		nodes[parentIdx] = node{
 			ParentIndex:  -1,
 			SiblingIndex: -1,
 			Freq:         freq,
+			TotalHops:    totalHops + numChildren,
 		}
 		heap.Push(&nodeHeap, &nodes[parentIdx])
 	}
@@ -156,15 +165,27 @@ func Label(base int, freqs []int) (labels [][]int) {
 		combine(base)
 	}
 
+	// nodeHeap only has one node left.
+	totalHops := nodeHeap[0].TotalHops
+
 	// The first len(freqs) nodes in nodes list refer to the leaf nodes.
 	// These get labels assigned to them.
 	labels = make([][]int, len(freqs))
+
+	// One slice for all label data.
+	// Labels for all items will be subslices of this.
+	//
+	//   len(freqs) items x max depth of the tree
+	//   = len(freqs) x numIters
+	labelData := make([]int, 0, totalHops)
+
 	for idx, n := range nodes[:len(freqs)] {
 		// The label for the item is the path from the root to the leaf.
-		var label []int
+		start := len(labelData)
 		for c := n; c.ParentIndex != -1; c = nodes[c.ParentIndex] {
-			label = append(label, c.SiblingIndex)
+			labelData = append(labelData, c.SiblingIndex)
 		}
+		label := labelData[start:]
 
 		// Reverse the label so it goes from root to leaf.
 		slices.Reverse(label)
@@ -188,6 +209,12 @@ type node struct {
 	// SiblingIndex of the node is its position
 	// in the parent's children list.
 	SiblingIndex int
+
+	// TotalHops is the total number of hops from this node
+	// to all leaf nodes under it.
+	//
+	// It is used to optimize the label generation.
+	TotalHops int
 
 	// Frequency of the leaf node,
 	// or the combined frequency of the leaf nodes of a branch node.
