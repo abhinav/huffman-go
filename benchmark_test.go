@@ -21,7 +21,7 @@ func BenchmarkLabel(b *testing.B) {
 
 				b.ResetTimer()
 
-				for i := 0; i < b.N; i++ {
+				for range b.N {
 					got := Label(base, freqs)
 					if len(got) != len(freqs) {
 						b.Fatalf("unexpected length: got=%d, want=%d", len(got), len(freqs))
