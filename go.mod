@@ -3,7 +3,7 @@ module go.abhg.dev/algorithm/huffman
 go 1.23.3
 
 require (
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	pgregory.net/rapid v1.2.0
 )
 
